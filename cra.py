@@ -299,7 +299,7 @@ class CGBankDatabase:
     
     @staticmethod
     def verify_user(username: str, password: str) -> bool:
-        """Verify user credentials"""
+        """Verify user credentials""";
         user = CGBankDatabase.get_user(username)
         if not user:
             return False
