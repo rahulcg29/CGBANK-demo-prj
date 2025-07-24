@@ -1,0 +1,370 @@
+{
+  "users": {
+    "rahul": {
+      "name": "Rahul",
+      "password": "password123",
+      "username": "rahul",
+      "account_number": "1234567890",
+      "balance": 10264.73,
+      "account_type": "Savings",
+      "contact": "rahul@example.com",
+      "address": "12 Gandhi Road, Coimbatore"
+    },
+    "cravin": {
+      "name": "Cravin",
+      "password": "mypassword",
+      "username": "cravin",
+      "account_number": "0987654321",
+      "balance": 8320.75,
+      "account_type": "Checking",
+      "contact": "cravin@example.com",
+      "address": "34 Nehru Street, Coimbatore"
+    }
+  },
+  "bank_info": {
+    "name": "CGBank",
+    "tagline": "Coimbatore Trusted Banking Partner",
+    "address": "174/2 Avinasi road, Annai statue, Coimbatore-641029",
+    "contact": "+91-63820-74060",
+    "email": "Cgbankcbe@gmail.com",
+    "helpline": "1800-123-4506",
+    "branches": [
+      {
+        "name": "Main Branch",
+        "address": "174/2 Avinasi Road, Annai Statue, Coimbatore-641029",
+        "timings": "Mon-Fri: 9AM-4PM, Sat: 9AM-1PM"
+      },
+      {
+        "name": "Gandhipuram Branch",
+        "address": "45 Nehru Street, Gandhipuram, Coimbatore-641012",
+        "timings": "Mon-Fri: 9AM-4PM, Sat: 9AM-1PM"
+      },
+      {
+        "name": "RS Puram Branch",
+        "address": "12 Race Course Road, RS Puram, Coimbatore-641002",
+        "timings": "Mon-Fri: 9AM-4PM, Sat: 9AM-1PM"
+      },
+      {
+        "name": "Peelamedu Branch",
+        "address": "34 Kamaraj Road, Peelamedu, Coimbatore-641004",
+        "timings": "Mon-Fri: 9AM-4PM, Sat: 9AM-1PM"
+      }
+    ],
+    "services": [
+      "Savings Accounts",
+      "Current Accounts",
+      "Fixed Deposits",
+      "Recurring Deposits",
+      "Personal Loans",
+      "Home Loans",
+      "Car Loans",
+      "Credit Cards",
+      "Debit Cards",
+      "Net Banking",
+      "Mobile Banking",
+      "Insurance Products",
+      "Investment Services"
+    ]
+  },
+  "loan_products": {
+    "personal_loan": {
+      "name": "Personal Loan",
+      "amount": "Up to \u00e2\u201a\u00b910 lakhs",
+      "interest": "10.5% - 15% p.a.",
+      "tenure": "Up to 5 years"
+    },
+    "home_loan": {
+      "name": "Home Loan",
+      "amount": "Up to \u00e2\u201a\u00b91 crore",
+      "interest": "8.4% - 9.5% p.a.",
+      "tenure": "Up to 20 years"
+    },
+    "car_loan": {
+      "name": "Car Loan",
+      "amount": "Up to \u00e2\u201a\u00b930 lakhs",
+      "interest": "8.75% - 10.5% p.a.",
+      "tenure": "Up to 7 years"
+    },
+    "education_loan": {
+      "name": "Education Loan",
+      "amount": "Up to \u00e2\u201a\u00b920 lakhs",
+      "interest": "9.5% - 11% p.a.",
+      "tenure": "Up to 10 years"
+    }
+  },
+  "government_schemes": {
+    "modi_scheme": {
+      "name": "Modi Scheme",
+      "benefits": [
+        "Low-interest loans for agricultural activities",
+        "Subsidies on fertilizers and seeds",
+        "Training programs for modern farming techniques",
+        "Insurance coverage for crops"
+      ],
+      "eligibility": "All farmers in Coimbatore district",
+      "application": "Visit any CGBank branch with your farmer ID and land documents"
+    },
+    "pm_farmer_scheme": {
+      "name": "PM Farmer Scheme",
+      "benefits": [
+        "Direct cash transfers to eligible farmers",
+        "Assistance for purchasing seeds and equipment",
+        "Support for crop insurance",
+        "Annual financial assistance of \u00e2\u201a\u00b96,000"
+      ],
+      "eligibility": "Small and marginal farmers with land holdings up to 2 hectares",
+      "application": "Through CGBank's agricultural loan department"
+    },
+    "thangamagal_scheme": {
+      "name": "Thangamagal Scheme",
+      "benefits": [
+        "Financial support for women entrepreneurs",
+        "Self-help group formation assistance",
+        "Business development training",
+        "Low-interest loans for women-owned businesses"
+      ],
+      "eligibility": "Women aged 18-60 years",
+      "application": "Visit any CGBank branch with ID proof and business plan"
+    }
+  },
+  "account_info": {
+    "student_account": {
+      "name": "Student Account",
+      "min_balance": 0,
+      "interest_rate": 2.5,
+      "documents": "Student ID, Address Proof",
+      "features": "Zero balance account, Special education loans, Discounts on student services"
+    },
+    "nri_account": {
+      "name": "NRI Account",
+      "min_balance": 5000,
+      "interest_rate": 3.5,
+      "documents": "Passport, Visa, Address Proof",
+      "features": "Foreign currency support, Global banking, Higher interest rates"
+    },
+    "senior_account": {
+      "name": "Senior Citizen Account",
+      "min_balance": 1000,
+      "interest_rate": 4.0,
+      "documents": "Age Proof, Address Proof",
+      "features": "Higher interest rates, Priority services, Special pension benefits"
+    },
+    "regular_savings_account": {
+      "name": "Regular Savings Account",
+      "min_balance": 1000,
+      "interest_rate": 3.0,
+      "documents": "ID Proof, Address Proof",
+      "features": "Free ATM withdrawals, Online banking, Monthly statements"
+    }
+  },
+  "bot_responses": {
+    "greetings": [
+      "Hello! I'm Rexa, your personal banking assistant at CGBank. How can I help you today?",
+      "Welcome to CGBank! I'm Rexa, here to assist you with all your banking needs.",
+      "Hi there! I'm Rexa, your intelligent banking assistant. What can I do for you?"
+    ],
+    "balance_inquiry": [
+      "Your current account balance is \u00e2\u201a\u00b9{balance:,.2f}.",
+      "Let me check your account balance for you.",
+      "Retrieving your account balance..."
+    ],
+    "transaction_history": [
+      "I'll show you your recent transaction history.",
+      "Let me pull up your transaction records.",
+      "Retrieving your transaction history..."
+    ],
+    "fund_transfer": [
+      "I can help you transfer money. Please provide the recipient details.",
+      "Let me assist you with fund transfer.",
+      "I'll guide you through the money transfer process."
+    ],
+    "bill_payment": [
+      "I can help you pay your bills. Which bill would you like to pay?",
+      "Let me assist you with bill payment.",
+      "I'll help you process your bill payment."
+    ],
+    "thanks": [
+      "You're welcome! Is there anything else I can help you with?",
+      "Happy to help! Let me know if you need anything else.",
+      "Glad I could assist you! Anything else I can do for you?"
+    ],
+    "account": [
+      "i can help you to create a bank account",
+      " let me show the  types of bank account",
+      "i'll help you to open bank account"
+    ]
+  },
+  "bills": [
+    {
+      "name": "LIC HOUSING/FINANCE",
+      "amount": 17450.5,
+      "due": "2025-07-01",
+      "status": "Upcoming"
+    }
+  ],
+  "spending_categories": [
+    {
+      "name": "Food",
+      "amount": 450
+    },
+    {
+      "name": "Travel",
+      "amount": 320
+    },
+    {
+      "name": "Movie",
+      "amount": 180
+    },
+    {
+      "name": "Bills",
+      "amount": 890
+    },
+    {
+      "name": "Shopping",
+      "amount": 260
+    },
+    {
+      "name": "Healthcare",
+      "amount": 120
+    }
+  ],
+  "transactions_history": [
+    {
+      "name": "MEESHO BILL",
+      "amt": 860.85
+    },
+    {
+      "name": "Rahul transfer",
+      "amt": 334.63
+    },
+    {
+      "name": "car credit",
+      "amt": 489.84
+    },
+    {
+      "name": "salary credit",
+      "amt": 627.62
+    },
+    {
+      "name": "HDB/FINANCE",
+      "amt": 297.5
+    },
+    {
+      "name": "Rahul transfer",
+      "amt": 991.41
+    },
+    {
+      "name": "MEESHO BILL",
+      "amt": 199.21
+    },
+    {
+      "name": "CAR Credit",
+      "amt": 703.88
+    },
+    {
+      "name": "HDB/FINANCE",
+      "amt": 68.63
+    },
+    {
+      "name": "Transfer to cravin",
+      "amt": -1000.0
+    },
+    {
+      "name": "Transfer to cravin",
+      "amt": -1000.0
+    },
+    {
+      "name": "Transfer to cravin",
+      "amt": -1000.0
+    },
+    {
+      "name": "Bill Payment: WATER BILL",
+      "amt": -1156.78
+    },
+    {
+      "name": "Transfer to cravin",
+      "amt": -1000.0
+    }
+  ],
+  "account_requests": [
+    {
+      "full_name": "kumar",
+      "email": "rrap99810@gmail.com",
+      "phone": "6383164182",
+      "address": "classic avenue ",
+      "account_type": "Regular Savings Account",
+      "username": "kumar@29",
+      "password": "pass5555",
+      "aadhar_number": "748638732270",
+      "pan_number": "HJUPP9663L",
+      "request_date": "2025-07-21 13:53:45",
+      "request_id": "f13ec7a6-1ada-4ee1-99a0-17ddfcf01141",
+      "status": "Pending"
+    },
+    {
+      "full_name": "ganesh ",
+      "email": "ganesh@22@gmail.com",
+      "phone": "6382047060",
+      "address": "28 thadagam road cbe 641112",
+      "account_type": "Senior Citizen Account",
+      "username": "ganesh@50",
+      "password": "kuttyganesh",
+      "aadhar_number": "450878065555",
+      "pan_number": "ASPPP7752H",
+      "request_date": "2025-07-21 14:02:18",
+      "request_id": "de5c3cea-545b-4dd0-b17b-8ea7bfc89eb1",
+      "status": "Pending"
+    },
+    {
+      "full_name": "athira",
+      "email": "rahulathira2003@gmail.com",
+      "phone": "9043560885",
+      "address": "classic avenue ",
+      "account_type": "Regular Savings Account",
+      "username": "athra200",
+      "password": "123456789",
+      "aadhar_number": "000000000000",
+      "pan_number": "HJUPP9663L",
+      "request_date": "2025-07-22 16:41:01",
+      "request_id": "e501ecaf-687e-4912-9e9c-3daa4b992972",
+      "status": "Pending"
+    },
+    {
+      "full_name": "ganesh",
+      "email": "ganesh22@gmail.com",
+      "phone": "6382074605",
+      "address": "classic avenue",
+      "account_type": "Regular Savings Account",
+      "username": "ganesh@22",
+      "password": "9c39bc7ea45e7bc7c9c9f9fa58ca3711a4f6a1aa11e6cc19b4cce6b441bbb0bf",
+      "aadhar_number": "748638732270",
+      "pan_number": "HJUPP9663L",
+      "request_date": "2025-07-23 15:45:14",
+      "request_id": "cc14e63e-8e4f-4ac3-acc6-2caa53bf25c8",
+      "status": "Pending"
+    }
+  ],
+  "bank_accounts": {
+    "student_account": {
+      "name": "Student Account",
+      "min_balance": 0,
+      "interest_rate": 2.5,
+      "documents": "Student ID, Address Proof",
+      "features": "Zero balance account, Special education loans, Discounts on student services"
+    },
+    "NRI_account": {
+      "name": "NRI Account",
+      "min_balance": 5000,
+      "interest_rate": 3.5,
+      "documents": "Passport, Visa, Address Proof",
+      "features": "Foreign currency support, Global banking, Higher interest rates"
+    },
+    "senior_account": {
+      "name": "Senior Citizen Account",
+      "min_balance": 1000,
+      "interest_rate": 4.0,
+      "documents": "Age Proof, Address Proof",
+      "features": "Higher interest rates, Priority services, Special pension benefits"
+    }
+  }
+}
