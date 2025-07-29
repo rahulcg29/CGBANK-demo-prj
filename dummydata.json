@@ -2,10 +2,10 @@
   "users": {
     "rahul": {
       "name": "Rahul",
-      "password": "password123",
+      "password": "mypassword",
       "username": "rahul",
       "account_number": "1234567890",
-      "balance": 10264.73,
+      "balance": 990064.73,
       "account_type": "Savings",
       "contact": "rahul@example.com",
       "address": "12 Gandhi Road, Coimbatore"
@@ -284,6 +284,14 @@
     {
       "name": "Transfer to cravin",
       "amt": -1000.0
+    },
+    {
+      "name": "Transfer to velu",
+      "amt": -100.0
+    },
+    {
+      "name": "Transfer to harsha",
+      "amt": -10000.0
     }
   ],
   "account_requests": [

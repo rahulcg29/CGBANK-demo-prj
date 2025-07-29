@@ -22,6 +22,7 @@ from email.mime.multipart import MIMEMultipart
 import os
 from io import BytesIO
 from pathlib import Path
+import extra_streamlit_components as stx
 
 # Load the bank data with error handling
 try:
@@ -303,7 +304,7 @@ class CGBankDatabase:
         user = CGBankDatabase.get_user(username)
         if not user:
             return False
-        return user['password'] == password
+        return user['password'] == CGBankDatabase.hash_password(password)
     
     @staticmethod
     def get_bank_info() -> Dict[str, Any]:
@@ -918,9 +919,11 @@ class CGBankApp:
     def __init__(self):
         self.bot = RexaBot()
         self.feedback_system = FeedbackSystem()
+        self.cookie_manager = stx.CookieManager()
         self._initialize_session_state()
         self._setup_page_config()
         self._load_custom_styles()
+        self._check_persistent_login()
     
     def _initialize_session_state(self):
         """Initialize session state variables"""
@@ -942,6 +945,36 @@ class CGBankApp:
             st.session_state.feedback_submitted = False
         if 'show_create_account' not in st.session_state:
             st.session_state.show_create_account = False
+    
+    def _check_persistent_login(self):
+        """Check for existing session cookies to maintain login state"""
+        if not st.session_state.logged_in:
+            cookies = self.cookie_manager.get_all()
+            if 'cgbank_session' in cookies:
+                try:
+                    session_data = json.loads(cookies['cgbank_session'])
+                    username = session_data.get('username')
+                    if username and CGBankDatabase.get_user(username):
+                        st.session_state.logged_in = True
+                        st.session_state.current_user = username
+                        st.session_state.page = "dashboard"
+                        st.rerun()
+                except:
+                    # Clear invalid cookie
+                    self.cookie_manager.delete('cgbank_session')
+    
+    def _set_persistent_login(self, username: str):
+        """Set persistent login cookies"""
+        session_data = {'username': username}
+        self.cookie_manager.set(
+            'cgbank_session',
+            json.dumps(session_data),
+            expires_at=datetime.now() + timedelta(days=7)
+        )
+    
+    def _clear_persistent_login(self):
+        """Clear login cookies"""
+        self.cookie_manager.delete('cgbank_session')
     
     def _setup_page_config(self):
         """Configure the Streamlit page settings"""
@@ -1155,12 +1188,13 @@ class CGBankApp:
                 self._render_login_form()
     
     def _render_login_form(self):
-        """Render the login form"""
+        """Render the login form with persistent session support"""
         st.markdown("### Login to Your Account")
         
         with st.form("login_form"):
             username = st.text_input("Username", placeholder="Enter your username")
             password = st.text_input("Password", type="password", placeholder="Enter your password")
+            remember_me = st.checkbox("Remember me", value=True)
             
             col1, col2 = st.columns(2)
             with col1:
@@ -1182,6 +1216,10 @@ class CGBankApp:
                     st.session_state.current_user = username.lower()
                     st.session_state.page = "dashboard"
                     st.session_state.transactions = CGBankDatabase.get_user_transactions(username)
+                    
+                    if remember_me:
+                        self._set_persistent_login(username)
+                    
                     st.success("Login successful!")
                     st.rerun()
                     st.balloons()
@@ -1636,6 +1674,7 @@ class CGBankApp:
                     st.session_state.logged_in = False
                     st.session_state.current_user = None
                     st.session_state.page = "login"
+                    self._clear_persistent_login()
                     st.rerun()
             else:
                 st.markdown("Please login to access your account")

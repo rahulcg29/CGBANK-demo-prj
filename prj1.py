@@ -468,7 +468,7 @@ class RexaBot:
     def __init__(self):
         self.name = "Rexa"
         self.service_keywords = {
-            'balance_inquiry': ['balance', 'account balance', 'how much money', 'check balance', 
+            'balance_inquiry': ['balance', 'account balance', ' how much money', 'check balance', 
                               'current balance', 'what do i have', 'funds available', 'available balance',
                               'remaining balance', 'account summary'],
             'transaction_history': ['transaction', 'history', 'statement', 'recent transactions', 
@@ -480,7 +480,7 @@ class RexaBot:
             'bill_payment': ['pay bill', 'bill payment', 'utility bill', 'electricity bill', 
                            'water bill', 'gas bill', 'phone bill', 'internet bill',
                            'credit card bill', 'mobile recharge'],
-            'bank_info': ['about cgbank', 'bank information', 'bank details', 'what is cgbank', 
+            'bank_info': ['about cgbank', 'bank information', 'bank details', 'cgbank', 
                          'bank services', 'products offered', 'bank features', 'branch locations',
                          'contact bank', 'bank timings'],
             'loan_info': ['loan', 'borrow', 'credit', 'home loan', 'personal loan', 'car loan',

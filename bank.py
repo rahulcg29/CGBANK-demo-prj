@@ -10,7 +10,18 @@ from typing import Dict, List, Optional, Union, Any
 import ollama
 from difflib import get_close_matches
 import base64
-from fpdf import FPDF  # For PDF generation
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+import uuid
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
+from io import BytesIO
+from pathlib import Path
 
 # Load the bank data with error handling
 try:
@@ -26,13 +37,16 @@ except json.JSONDecodeError:
 # Ensure all required keys exist in BANK_DATA
 REQUIRED_KEYS = ['users', 'bank_info', 'loan_products', 'government_schemes', 
                 'transactions_history', 'bills', 'spending_categories', 'bot_responses',
-                'account_info']
+                'account_info', 'account_requests']
 for key in REQUIRED_KEYS:
     if key not in BANK_DATA:
-        st.error(f"Error: Missing required key '{key}' in dummydata.json!")
-        st.stop()
+        if key == 'account_requests':
+            BANK_DATA['account_requests'] = []
+        else:
+            st.error(f"Error: Missing required key '{key}' in dummydata.json!")
+            st.stop()
 
-# Add properly formatted default bank_accounts if not present
+# Add default bank_accounts if not present
 if 'bank_accounts' not in BANK_DATA:
     BANK_DATA['bank_accounts'] = {
         'student_account': {
@@ -42,7 +56,7 @@ if 'bank_accounts' not in BANK_DATA:
             'documents': 'Student ID, Address Proof',
             'features': 'Zero balance account, Special education loans, Discounts on student services'
         },
-        'NRI_account': {
+        'nri_account': {
             'name': 'NRI Account',
             'min_balance': 5000,
             'interest_rate': 3.5,
@@ -55,6 +69,13 @@ if 'bank_accounts' not in BANK_DATA:
             'interest_rate': 4.0,
             'documents': 'Age Proof, Address Proof',
             'features': 'Higher interest rates, Priority services, Special pension benefits'
+        },
+        'regular_savings_account': {
+            'name': 'Regular Savings Account',
+            'min_balance': 1000,
+            'interest_rate': 3.0,
+            'documents': 'ID Proof, Address Proof',
+            'features': 'Free ATM withdrawals, Online banking, Monthly statements'
         }
     }
 
@@ -69,108 +90,197 @@ for account_type, account_data in BANK_DATA['account_info'].items():
     account_data.setdefault('documents', 'Not specified')
     account_data.setdefault('features', 'No special features')
 
-class PDFReport(FPDF):
-    """Custom PDF report generator for banking statements"""
+class PDFGenerator:
+    """Class to generate PDF reports using ReportLab"""
     
-    def __init__(self, user_data: Dict[str, Any], report_data: Dict[str, Any], *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.user_data = user_data
-        self.report_data = report_data
-        self.set_auto_page_break(auto=True, margin=15)
-        self.add_page()
+    @staticmethod
+    def generate_pdf_report(user_data: Dict[str, Any], report_data: Dict[str, Any]) -> BytesIO:
+        """Generate a PDF report with transaction details and user information"""
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
         
-    def header(self):
-        # Bank logo and header
-        self.set_font('Arial', 'B', 16)
-        self.cell(0, 10, 'CGBank - Monthly Statement Report', 0, 1, 'C')
-        self.set_font('Arial', '', 12)
-        self.cell(0, 10, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", 0, 1, 'C')
-        self.ln(10)
+        styles = getSampleStyleSheet()
+        elements = []
         
-        # User information section
-        self.set_font('Arial', 'B', 14)
-        self.cell(0, 10, 'Account Holder Information', 0, 1)
-        self.set_font('Arial', '', 12)
+        # Custom styles
+        title_style = ParagraphStyle(
+            'Title',
+            parent=styles['Heading1'],
+            fontSize=16,
+            alignment=1,  # Center alignment
+            spaceAfter=12
+        )
+        
+        header_style = ParagraphStyle(
+            'Header',
+            parent=styles['Heading2'],
+            fontSize=14,
+            spaceAfter=6
+        )
+        
+        normal_style = styles['Normal']
+        bold_style = styles['Heading3']
+        
+        # Title
+        elements.append(Paragraph('CGBank - Monthly Statement Report', title_style))
+        elements.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", styles['Normal']))
+        elements.append(Spacer(1, 0.5 * inch))
+        
+        # Account Holder Information
+        elements.append(Paragraph('Account Holder Information', header_style))
         
         # User details table
-        with self.table(width=190, col_widths=(60, 130), line_height=8) as table:
-            data = [
-                ["Account Holder", self.user_data['name']],
-                ["Account Number", self.user_data['account_number']],
-                ["Account Type", self.user_data['account_type']],
-                ["Report Period", f"{self.report_data['start_date']} to {self.report_data['end_date']}"],
-                ["Current Balance", f"₹{self.user_data['balance']:,.2f}"]
-            ]
-            for row in data:
-                with table.row():
-                    for item in row:
-                        table.cell(item)
+        user_info = [
+            ["Account Holder", user_data['name']],
+            ["Account Number", user_data['account_number']],
+            ["Account Type", user_data['account_type']],
+            ["Report Period", f"{report_data['start_date']} to {report_data['end_date']}"],
+            ["Current Balance", f"₹{user_data['balance']:,.2f}"]
+        ]
         
-        self.ln(15)
+        user_table = Table(user_info, colWidths=[2*inch, 4*inch])
+        user_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 1, colors.lightgrey),
+        ]))
         
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 8)
-        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+        elements.append(user_table)
+        elements.append(Spacer(1, 0.5 * inch))
         
-    def add_summary_section(self):
-        self.set_font('Arial', 'B', 14)
-        self.cell(0, 10, 'Transaction Summary', 0, 1)
-        self.set_font('Arial', '', 12)
+        # Transaction Summary
+        elements.append(Paragraph('Transaction Summary', header_style))
         
-        # Summary table
-        with self.table(width=190, col_widths=(100, 90), line_height=8) as table:
-            data = [
-                ["Total Transactions", str(self.report_data['total_transactions'])],
-                ["Total Credit", f"₹{self.report_data['total_credit']:,.2f}"],
-                ["Total Debit", f"₹{self.report_data['total_debit']:,.2f}"],
-                ["Net Change", f"₹{self.report_data['net_change']:,.2f}"]
-            ]
-            for row in data:
-                with table.row():
-                    for item in row:
-                        table.cell(item)
+        summary_data = [
+            ["Total Transactions", str(report_data['total_transactions'])],
+            ["Total Credit", f"₹{report_data['total_credit']:,.2f}"],
+            ["Total Debit", f"₹{report_data['total_debit']:,.2f}"],
+            ["Net Change", f"₹{report_data['net_change']:,.2f}"]
+        ]
         
-        self.ln(15)
+        summary_table = Table(summary_data, colWidths=[3*inch, 3*inch])
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 1, colors.lightgrey),
+        ]))
         
-    def add_transactions_section(self):
-        self.set_font('Arial', 'B', 14)
-        self.cell(0, 10, 'Transaction Details', 0, 1)
-        self.set_font('Arial', '', 10)
+        elements.append(summary_table)
+        elements.append(Spacer(1, 0.5 * inch))
         
-        # Transactions table
-        with self.table(width=190, col_widths=(30, 60, 50, 50), line_height=6) as table:
-            # Header row
-            with table.row():
-                table.cell("Date", style='B')
-                table.cell("Description", style='B')
-                table.cell("Amount", style='B')
-                table.cell("Balance", style='B')
+        # Transaction Details
+        elements.append(Paragraph('Transaction Details', header_style))
+        
+        # Prepare transaction data
+        transaction_data = [["Date", "Description", "Amount", "Balance"]]
+        for txn in report_data['transactions']:
+            date_str = txn['date'].strftime('%Y-%m-%d') if isinstance(txn['date'], datetime) else txn['date']
+            amount = txn['amount']
+            amount_str = f"+₹{amount:,.2f}" if amount > 0 else f"-₹{abs(amount):,.2f}"
+            transaction_data.append([
+                date_str,
+                txn['description'],
+                amount_str,
+                f"₹{txn['balance']:,.2f}"
+            ])
+        
+        # Create transaction table
+        transaction_table = Table(transaction_data, colWidths=[1*inch, 2.5*inch, 1.5*inch, 1.5*inch])
+        transaction_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('GRID', (0, 0), (-1, -1), 1, colors.lightgrey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.whitesmoke]),
+        ]))
+        
+        elements.append(transaction_table)
+        elements.append(Spacer(1, 0.5 * inch))
+        
+        # Notes section
+        notes = """
+        <para>
+        <font size=9><i>Note: This is an automatically generated statement. 
+        For any discrepancies, please contact CGBank customer support 
+        within 7 days of receiving this statement.</i></font>
+        </para>
+        """
+        elements.append(Paragraph(notes, styles['Normal']))
+        elements.append(Spacer(1, 0.2 * inch))
+        elements.append(Paragraph("CGBank - Coimbatore Trusted Banking Partner", 
+                                ParagraphStyle('Footer', parent=styles['Normal'], alignment=1)))
+        
+        # Build the PDF
+        doc.build(elements)
+        
+        buffer.seek(0)
+        return buffer
+
+class FeedbackSystem:
+    """Class to handle feedback and reviews"""
+    
+    @staticmethod
+    def send_feedback_email(name: str, email: str, rating: int, feedback: str):
+        """Send feedback email to the specified address"""
+        try:
+            # Email configuration
+            sender_email = "cravinsanjay22@gmail.com"
+            sender_password = "gror taom ymiq dhat"
+            receiver_email = "cravinsanjay10@gmail.com"
             
-            # Transaction rows
-            for txn in self.report_data['transactions']:
-                date_str = txn['date'].strftime('%Y-%m-%d') if isinstance(txn['date'], datetime) else txn['date']
-                amount = txn['amount']
-                amount_str = f"+₹{amount:,.2f}" if amount > 0 else f"-₹{abs(amount):,.2f}"
+            # Create message
+            message = MIMEMultipart()
+            message["From"] = sender_email
+            message["To"] = receiver_email
+            message["Subject"] = f"New Feedback from {name} - Rating: {rating}/5"
+            
+            # Email body
+            body = f"""
+            <h2>New Feedback Received</h2>
+            <p><strong>Name:</strong> {name}</p>
+            <p><strong>Email:</strong> {email}</p>
+            <p><strong>Rating:</strong> {rating} stars</p>
+            <p><strong>Feedback:</strong></p>
+            <p>{feedback}</p>
+            """
+            
+            message.attach(MIMEText(body, "html"))
+            
+            # Send email
+            with smtplib.SMTP("smtp.gmail.com", 587) as server:
+                server.starttls()
+                server.login(sender_email, sender_password)
+                server.sendmail(sender_email, receiver_email, message.as_string())
                 
-                with table.row():
-                    table.cell(date_str)
-                    table.cell(txn['description'])
-                    table.cell(amount_str)
-                    table.cell(f"₹{txn['balance']:,.2f}")
-        
-        self.ln(15)
-        
-    def add_notes_section(self):
-        self.set_font('Arial', 'I', 10)
-        self.multi_cell(0, 5, "Note: This is an automatically generated statement. "
-                             "For any discrepancies, please contact CGBank customer support "
-                             "within 7 days of receiving this statement.")
-        self.ln(5)
-        self.cell(0, 5, "CGBank - Coimbatore Trusted Banking Partner", 0, 1, 'C')
+            return True
+        except Exception as e:
+            st.error(f"Error sending feedback email: {str(e)}")
+            return False
 
 class CGBankDatabase:
     """Class to interact with the bank data"""
+    
+    @staticmethod
+    def _save_data():
+        """Save the current BANK_DATA to the JSON file"""
+        try:
+            with open('dummydata.json', 'w') as f:
+                json.dump(BANK_DATA, f, indent=2)
+            return True
+        except Exception as e:
+            st.error(f"Error saving data: {str(e)}")
+            return False
     
     @staticmethod
     def hash_password(password: str) -> str:
@@ -261,8 +371,8 @@ class CGBankDatabase:
         return BANK_DATA['spending_categories']
     
     @staticmethod
-    def add_transaction(username: str, description: str, amount: float):
-        """Add a new transaction for the user"""
+    def add_transaction(username: str, description: str, amount: float) -> bool:
+        """Add a new transaction for the user and save to JSON"""
         user = CGBankDatabase.get_user(username)
         if not user:
             return False
@@ -270,31 +380,87 @@ class CGBankDatabase:
         # Get current transactions
         transactions = CGBankDatabase.get_user_transactions(username)
         
-        # Create new transaction with updated balance
-        new_balance = user['balance'] + amount
+        # Create new transaction
         new_transaction = {
             'date': datetime.now(),
             'description': description,
             'amount': amount,
-            'balance': new_balance
+            'balance': user['balance'] + amount
         }
         
         # Insert at beginning of list (most recent first)
         transactions.insert(0, new_transaction)
         
-        # Update user balance in both session state and BANK_DATA
-        user['balance'] = new_balance
+        # Update user balance
+        user['balance'] += amount
         
-        # Update the original BANK_DATA user balance
-        username_lower = username.lower()
-        for uname, user_data in BANK_DATA['users'].items():
-            if uname.lower() == username_lower:
-                user_data['balance'] = new_balance
-                break
+        # Add to transactions_history in BANK_DATA
+        BANK_DATA['transactions_history'].append({
+            'name': description,
+            'amt': amount
+        })
         
         # Update session state
         st.session_state.transactions = transactions
-        return True
+        
+        # Save to JSON file
+        return CGBankDatabase._save_data()
+    
+    @staticmethod
+    def add_bill_payment(username: str, bill_name: str, amount: float) -> bool:
+        """Add a bill payment transaction and update JSON"""
+        user = CGBankDatabase.get_user(username)
+        if not user:
+            return False
+        
+        # Add to transactions
+        success = CGBankDatabase.add_transaction(username, f"Bill Payment: {bill_name}", -amount)
+        if not success:
+            return False
+        
+        # Remove paid bill from bills list
+        BANK_DATA['bills'] = [bill for bill in BANK_DATA['bills'] if bill['name'] != bill_name]
+        
+        # Save to JSON file
+        return CGBankDatabase._save_data()
+    
+    @staticmethod
+    def add_new_bill(username: str, bill_data: Dict[str, Any]) -> bool:
+        """Add a new bill to the user's account and update JSON"""
+        # Add to bills list
+        BANK_DATA['bills'].append(bill_data)
+        
+        # Save to JSON file
+        return CGBankDatabase._save_data()
+    
+    @staticmethod
+    def update_user_balance(username: str, amount: float) -> bool:
+        """Update user balance and save to JSON"""
+        user = CGBankDatabase.get_user(username)
+        if not user:
+            return False
+        
+        user['balance'] += amount
+        return CGBankDatabase._save_data()
+    
+    @staticmethod
+    def request_new_account(account_data: Dict[str, Any]) -> bool:
+        """Add a new account request to the system"""
+        try:
+            # Generate a unique request ID
+            request_id = str(uuid.uuid4())
+            account_data['request_id'] = request_id
+            account_data['status'] = 'Pending'
+            account_data['request_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Add to account requests
+            BANK_DATA['account_requests'].append(account_data)
+            
+            # Save to JSON file
+            return CGBankDatabase._save_data()
+        except Exception as e:
+            print(f"Error saving account request: {e}")
+            return False
 
 class RexaBot:
     """CGBank's intelligent banking assistant with enhanced NLP capabilities"""
@@ -523,35 +689,24 @@ class RexaBot:
         
         return report
     
-    def _create_pdf_report(self, username: str, report_data: Dict[str, Any]) -> str:
+    def _create_pdf_report(self, username: str, report_data: Dict[str, Any]) -> BytesIO:
         """Create a PDF report with transaction details and user information"""
         user_data = CGBankDatabase.get_user(username)
         if not user_data:
             return None
         
         try:
-            # Create PDF document
-            pdf = PDFReport(user_data, report_data)
-            pdf.add_summary_section()
-            pdf.add_transactions_section()
-            pdf.add_notes_section()
-            
-            # Save to temporary file
-            filename = f"CGBank_Statement_{username}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-            pdf.output(filename)
-            
-            return filename
+            pdf_buffer = PDFGenerator.generate_pdf_report(user_data, report_data)
+            return pdf_buffer
         except Exception as e:
             print(f"Error generating PDF report: {e}")
             return None
     
-    def _create_download_link(self, filename: str) -> str:
+    def _create_download_link(self, pdf_buffer: BytesIO, username: str) -> str:
         """Create a download link for the PDF report"""
         try:
-            with open(filename, "rb") as f:
-                pdf_data = f.read()
-            
-            b64 = base64.b64encode(pdf_data).decode()
+            b64 = base64.b64encode(pdf_buffer.getvalue()).decode()
+            filename = f"CGBank_Statement_{username}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
             href = f'<a href="data:application/pdf;base64,{b64}" download="{filename}">Download PDF Report</a>'
             return href
         except Exception as e:
@@ -639,10 +794,10 @@ class RexaBot:
                 return "You don't have any transactions in the last month to generate a report."
             
             # Generate PDF report
-            pdf_filename = self._create_pdf_report(username, report)
-            if pdf_filename:
+            pdf_buffer = self._create_pdf_report(username, report)
+            if pdf_buffer:
                 # Store the download link in session state
-                download_link = self._create_download_link(pdf_filename)
+                download_link = self._create_download_link(pdf_buffer, username)
                 st.session_state.download_link = download_link
                 
                 response = (f"**📊 Monthly Report ({report['start_date']} to {report['end_date']})**\n\n"
@@ -667,9 +822,7 @@ class RexaBot:
         
         if intent == 'balance_inquiry':
             if user_data:
-                # Always get the latest balance from the user data
-                current_balance = CGBankDatabase.get_user(username)['balance']
-                return self._get_random_response('balance_inquiry').format(balance=current_balance)
+                return self._get_random_response('balance_inquiry').format(balance=user_data['balance'])
             return "Please log in to check your account balance."
         
         elif intent == 'transaction_history':
@@ -737,7 +890,7 @@ class RexaBot:
             elif 'student' in message:
                 return self._extract_account_info('student_account')
             elif 'nri' in message:
-                return self._extract_account_info('NRI_account')   
+                return self._extract_account_info('nri_account')   
             elif 'senior' in message:
                 return self._extract_account_info('senior_account')
             else:
@@ -755,9 +908,7 @@ class RexaBot:
             
         context = ""
         if user_data:
-            # Always get the latest balance from the user data
-            current_balance = CGBankDatabase.get_user(username)['balance']
-            context = f"Customer: {user_data['name']}, Account Balance: ₹{current_balance:,.2f}"
+            context = f"Customer: {user_data['name']}, Account Balance: ₹{user_data['balance']:,.2f}"
         
         return self._get_ollama_response(message, context)
 
@@ -766,26 +917,30 @@ class CGBankApp:
     
     def __init__(self):
         self.bot = RexaBot()
+        self.feedback_system = FeedbackSystem()
         self._initialize_session_state()
         self._setup_page_config()
         self._load_custom_styles()
     
     def _initialize_session_state(self):
         """Initialize session state variables"""
-        if 'logged_in' not in st.session_state:
-            st.session_state.logged_in = False
-        if 'current_user' not in st.session_state:
-            st.session_state.current_user = None
-        if 'page' not in st.session_state:
-            st.session_state.page = "login"
-        if 'bot_conversation' not in st.session_state:
-            st.session_state.bot_conversation = []
-        if 'show_popup_bot' not in st.session_state:
-            st.session_state.show_popup_bot = False
-        if 'transactions' not in st.session_state:
-            st.session_state.transactions = []
-        if 'download_link' not in st.session_state:
-            st.session_state.download_link = None
+        # Initialize all session state variables with defaults if they don't exist
+        session_defaults = {
+            'logged_in': False,
+            'current_user': None,
+            'page': "login",
+            'bot_conversation': [],
+            'show_popup_bot': False,
+            'transactions': [],
+            'download_link': None,
+            'feedback_submitted': False,
+            'show_create_account': False,
+            'initialized': True  # Flag to indicate session is initialized
+        }
+        
+        for key, default in session_defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = default
     
     def _setup_page_config(self):
         """Configure the Streamlit page settings"""
@@ -896,11 +1051,87 @@ class CGBankApp:
                 margin: 1rem 0;
                 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             }
+            .feedback-form {
+                background: white;
+                padding: 1.5rem;
+                border-radius: 10px;
+                margin: 1rem 0;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+            .star-rating {
+                display: flex;
+                justify-content: center;
+                margin: 1rem 0;
+            }
+            .star-rating input {
+                display: none;
+            }
+            .star-rating label {
+                font-size: 2rem;
+                color: #ddd;
+                cursor: pointer;
+                margin: 0 0.2rem;
+            }
+            .star-rating input:checked ~ label {
+                color: #ffc107;
+            }
+            .star-rating label:hover,
+            .star-rating label:hover ~ label {
+                color: #ffc107;
+            }
+            .create-account-form {
+                background: white;
+                padding: 2rem;
+                border-radius: 10px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                margin-top: 2rem;
+            }
         </style>
         """, unsafe_allow_html=True)
     
+    def _render_feedback_form(self):
+        """Render the feedback form in the dashboard"""
+        with st.expander("📝 Give Us Feedback"):
+            with st.form("feedback_form", clear_on_submit=True):
+                st.markdown("### We Value Your Feedback")
+                
+                # Name input
+                name = st.text_input("Your Name", placeholder="Enter your name")
+                
+                # Email input
+                email = st.text_input("Your Email", placeholder="Enter your email")
+                
+                # Star rating
+                st.markdown("### Rate Your Experience")
+                rating = st.slider("Rating", 1, 5, 5, key="feedback_rating")
+                
+                # Feedback text
+                feedback = st.text_area("Your Feedback", placeholder="Share your experience with us...", height=150)
+                
+                # Submit button
+                submitted = st.form_submit_button("Submit Feedback", use_container_width=True)
+                
+                if submitted:
+                    if not name or not feedback:
+                        st.error("Please provide both your name and feedback!")
+                        return
+                    
+                    # Send feedback email
+                    success = self.feedback_system.send_feedback_email(
+                        name=name,
+                        email=email if email else "Not provided",
+                        rating=rating,
+                        feedback=feedback
+                    )
+                    
+                    if success:
+                        st.success("Thank you for your feedback! We appreciate your time.")
+                        st.session_state.feedback_submitted = True
+                    else:
+                        st.error("Failed to submit feedback. Please try again later.")
+    
     def _render_login_page(self):
-        """Render the login page"""
+        """Render the login page with account creation option"""
         st.markdown("""
         <div class="main-header">
             <h1>🏦 CGBank</h1>
@@ -917,32 +1148,134 @@ class CGBankApp:
         col1, col2, col3 = st.columns([1, 2, 1])
         
         with col2:
-            st.markdown("### Login to Your Account")
+            if st.session_state.show_create_account:
+                self._render_create_account_form()
+            else:
+                self._render_login_form()
+    
+    def _render_login_form(self):
+        """Render the login form"""
+        st.markdown("### Login to Your Account")
+        
+        with st.form("login_form"):
+            username = st.text_input("Username", placeholder="Enter your username")
+            password = st.text_input("Password", type="password", placeholder="Enter your password")
             
-            with st.form("login_form"):
-                username = st.text_input("Username", placeholder="Enter your username")
-                password = st.text_input("Password", type="password", placeholder="Enter your password")
+            col1, col2 = st.columns(2)
+            with col1:
                 submitted = st.form_submit_button("Login", use_container_width=True)
+            with col2:
+                create_account = st.form_submit_button("Create New Account", use_container_width=True)
+            
+            if submitted:
+                if not username or not password:
+                    st.error("Please enter both username and password!")
+                    return
                 
-                if submitted:
-                    if not username or not password:
-                        st.error("Please enter both username and password!")
+                try:
+                    if not CGBankDatabase.verify_user(username, password):
+                        st.error("Invalid username or password!")
                         return
+                        
+                    st.session_state.logged_in = True
+                    st.session_state.current_user = username.lower()
+                    st.session_state.page = "dashboard"
+                    st.session_state.transactions = CGBankDatabase.get_user_transactions(username)
+                    st.success("Login successful!")
+                    st.rerun()
+                    st.balloons()
+                except Exception as e:
+                    st.error(f"An error occurred: {str(e)}")
+            
+            if create_account:
+                st.session_state.show_create_account = True
+                st.rerun()
+    
+    def _render_create_account_form(self):
+        """Render the account creation form"""
+        st.markdown("### Create a New CGBank Account")
+        
+        with st.form("create_account_form"):
+            st.markdown("#### Personal Information")
+            full_name = st.text_input("Full Name", placeholder="Enter your full name")
+            email = st.text_input("Email Address", placeholder="Enter your email address")
+            phone = st.text_input("Phone Number", placeholder="Enter your phone number")
+            address = st.text_area("Residential Address", placeholder="Enter your full address")
+            
+            st.markdown("#### Account Details")
+            account_type = st.selectbox(
+                "Account Type",
+                options=["Student Account", "NRI Account", "Senior Citizen Account", "Regular Savings Account"],
+                index=0
+            )
+            
+            username = st.text_input("Choose Username", placeholder="Create a username")
+            password = st.text_input("Create Password", type="password", placeholder="Create a password")
+            confirm_password = st.text_input("Confirm Password", type="password", placeholder="Confirm your password")
+            
+            st.markdown("#### KYC Information")
+            aadhar_number = st.text_input("Aadhar Number", placeholder="Enter 12-digit Aadhar number")
+            pan_number = st.text_input("PAN Number", placeholder="Enter PAN number").upper()
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                submit = st.form_submit_button("Submit Application", use_container_width=True)
+            with col2:
+                cancel = st.form_submit_button("Cancel", use_container_width=True)
+            
+            if cancel:
+                st.session_state.show_create_account = False
+                st.rerun()
+            
+            if submit:
+                if not all([full_name, email, phone, address, username, password, aadhar_number, pan_number]):
+                    st.error("Please fill in all required fields!")
+                    return
+                
+                if password != confirm_password:
+                    st.error("Passwords do not match!")
+                    return
+                
+                if len(aadhar_number) != 12 or not aadhar_number.isdigit():
+                    st.error("Please enter a valid 12-digit Aadhar number!")
+                    return
+                
+                if len(pan_number) != 10 or not re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]$', pan_number):
+                    st.error("Please enter a valid PAN number!")
+                    return
+                
+                # Check if username already exists
+                if CGBankDatabase.get_user(username):
+                    st.error("Username already exists! Please choose another one.")
+                    return
+                
+                # Prepare account data
+                account_data = {
+                    "full_name": full_name,
+                    "email": email,
+                    "phone": phone,
+                    "address": address,
+                    "account_type": account_type,
+                    "username": username,
+                    "password": CGBankDatabase.hash_password(password),
+                    "aadhar_number": aadhar_number,
+                    "pan_number": pan_number,
+                    "request_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                
+                # Save account request
+                if CGBankDatabase.request_new_account(account_data):
+                    st.session_state.show_create_account = False
+                    st.success("""
+                    Your account request has been submitted successfully!
                     
-                    try:
-                        if not CGBankDatabase.verify_user(username, password):
-                            st.error("Invalid username or password!")
-                            return
-                            
-                        st.session_state.logged_in = True
-                        st.session_state.current_user = username.lower()
-                        st.session_state.page = "dashboard"
-                        st.session_state.transactions = CGBankDatabase.get_user_transactions(username)
-                        st.success("Login successful!")
-                        st.rerun()
-                        st.balloons()
-                    except Exception as e:
-                        st.error(f"An error occurred: {str(e)}")
+                    Our bank staff will contact you shortly to complete the KYC process.
+                    You'll receive your account details via email once approved.
+                    
+                    Thank you for choosing CGBank!
+                    """)
+                else:
+                    st.error("Failed to submit account request. Please try again later.")
     
     def _render_dashboard(self):
         """Render the dashboard page"""
@@ -983,23 +1316,23 @@ class CGBankApp:
         st.markdown("### ⚡ Quick Actions")
         cols = st.columns(5)
         with cols[0]:
-            if st.button("💸 Transfer Money", use_container_width=True):
+            if st.button("💸 Transfer Money", key="dashboard_transfer", use_container_width=True):
                 st.session_state.page = "transfer"
                 st.rerun()
         with cols[1]:
-            if st.button("💰 Pay Bills", use_container_width=True):
+            if st.button("💰 Pay Bills", key="dashboard_bills", use_container_width=True):
                 st.session_state.page = "bills"
                 st.rerun()
         with cols[2]:
-            if st.button("📊 Transactions", use_container_width=True):
+            if st.button("📊 Transactions", key="dashboard_transactions", use_container_width=True):
                 st.session_state.page = "transactions"
                 st.rerun()
         with cols[3]:
-            if st.button("📈 Reports", use_container_width=True):
+            if st.button("📈 Reports", key="dashboard_reports", use_container_width=True):
                 st.session_state.page = "reports"
                 st.rerun()
         with cols[4]:
-            if st.button("🤖 Chat with Rexa", use_container_width=True):
+            if st.button("🤖 Chat with Rexa", key="dashboard_rexa", use_container_width=True):
                 st.session_state.page = "rexa"
                 st.rerun()
         
@@ -1030,6 +1363,9 @@ class CGBankApp:
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+        
+        # Add feedback form to dashboard
+        self._render_feedback_form()
     
     def _render_report_page(self):
         """Render the report analysis page"""
@@ -1178,7 +1514,7 @@ class CGBankApp:
 
     def _render_popup_bot(self):
         """Render the popup bot interface with built-in banking commands"""
-        if st.button("🤔", key="popup_toggle", help="Chat with Rexa"):
+        if st.button("🧠", key="popup_toggle", help="Chat with Rexa"):
             st.session_state.show_popup_bot = not st.session_state.show_popup_bot
             st.rerun()
         
@@ -1275,55 +1611,33 @@ class CGBankApp:
                 st.markdown(f"**Welcome, {user['name']}**")
                 st.markdown(f"Account: {user['account_number']}")
                 
-                if st.button("🏠 Dashboard", use_container_width=True):
+                if st.button("🏠 Dashboard", key="sidebar_dashboard", use_container_width=True):
                     st.session_state.page = "dashboard"
                     st.rerun()
-                if st.button("📊 Transactions", use_container_width=True):
+                if st.button("📊 Transactions", key="sidebar_transactions", use_container_width=True):
                     st.session_state.page = "transactions"
                     st.rerun()
-                if st.button("💸 Transfer",  use_container_width=True):
+                if st.button("💸 Transfer", key="sidebar_transfer", use_container_width=True):
                     st.session_state.page = "transfer"
                     st.rerun()
-                if st.button("💰 Bills", use_container_width=True):
+                if st.button("💰 Bills", key="sidebar_bills", use_container_width=True):
                     st.session_state.page = "bills"
                     st.rerun()
-                if st.button("📈 Reports", use_container_width=True):
+                if st.button("📈 Reports", key="sidebar_reports", use_container_width=True):
                     st.session_state.page = "reports"
                     st.rerun()
-                if st.button("🤖 Rexa", use_container_width=True):
+                if st.button("🤖 Rexa", key="sidebar_rexa", use_container_width=True):
                     st.session_state.page = "rexa"
                     st.rerun()
                 
                 st.markdown("---")
-                if st.button("🚪 Logout", use_container_width=True):
+                if st.button("🚪 Logout", key="sidebar_logout", use_container_width=True):
                     st.session_state.logged_in = False
                     st.session_state.current_user = None
                     st.session_state.page = "login"
                     st.rerun()
             else:
                 st.markdown("Please login to access your account")
-    
-    def run(self):
-        """Run the application"""
-        self._render_sidebar()
-        
-        if st.session_state.logged_in:
-            self._render_popup_bot()
-            
-            if st.session_state.page == "dashboard":
-                self._render_dashboard()
-            elif st.session_state.page == "transactions":
-                self._render_transactions_page()
-            elif st.session_state.page == "transfer":
-                self._render_transfer_page()
-            elif st.session_state.page == "bills":
-                self._render_bills_page()
-            elif st.session_state.page == "reports":
-                self._render_report_page()
-            elif st.session_state.page == "rexa":
-                self._render_bot_page()
-        else:
-            self._render_login_page()
     
     def _render_transactions_page(self):
         """Render the transactions page"""
@@ -1380,32 +1694,19 @@ class CGBankApp:
                             if amount > user['balance']:
                                 st.error("Insufficient funds for this transfer!")
                             else:
-                                # Update the balance in both session state and BANK_DATA
-                                new_balance = user['balance'] - amount
-                                user['balance'] = new_balance
+                                # Use the database method to ensure JSON is updated
+                                success = CGBankDatabase.add_transaction(
+                                    st.session_state.current_user,
+                                    f'Transfer to {recipient}',
+                                    -amount
+                                )
                                 
-                                # Update the original BANK_DATA user balance
-                                username_lower = st.session_state.current_user.lower()
-                                for uname, user_data in BANK_DATA['users'].items():
-                                    if uname.lower() == username_lower:
-                                        user_data['balance'] = new_balance
-                                        break
-                                
-                                # Create and add the new transaction
-                                new_transaction = {
-                                    'date': datetime.now(),
-                                    'description': f'Transfer to {recipient}',
-                                    'amount': -amount,
-                                    'balance': new_balance
-                                }
-                                
-                                # Update transactions in session state
-                                if 'transactions' not in st.session_state:
-                                    st.session_state.transactions = []
-                                st.session_state.transactions.insert(0, new_transaction)
-                                
-                                st.success(f"Transfer of ₹{amount:,.2f} to {recipient} initiated successfully!")
-                                st.balloons()
+                                if success:
+                                    st.success(f"Transfer of ₹{amount:,.2f} to {recipient} completed successfully!")
+                                    st.balloons()
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to complete transfer. Please try again.")
                         else:
                             st.error("Please enter valid transfer details!")
                     except Exception as e:
@@ -1455,32 +1756,19 @@ class CGBankApp:
                         if bill['amount'] > user['balance']:
                             st.error("Insufficient funds to pay this bill!")
                         else:
-                            # Update the balance in both session state and BANK_DATA
-                            new_balance = user['balance'] - bill['amount']
-                            user['balance'] = new_balance
+                            # Use the database method to ensure JSON is updated
+                            success = CGBankDatabase.add_bill_payment(
+                                st.session_state.current_user,
+                                bill['name'],
+                                bill['amount']
+                            )
                             
-                            # Update the original BANK_DATA user balance
-                            username_lower = st.session_state.current_user.lower()
-                            for uname, user_data in BANK_DATA['users'].items():
-                                if uname.lower() == username_lower:
-                                    user_data['balance'] = new_balance
-                                    break
-                            
-                            # Create and add the new transaction
-                            new_transaction = {
-                                'date': datetime.now(),
-                                'description': f'Bill Payment: {bill["name"]}',
-                                'amount': -bill['amount'],
-                                'balance': new_balance
-                            }
-                            
-                            # Update transactions in session state
-                            if 'transactions' not in st.session_state:
-                                st.session_state.transactions = []
-                            st.session_state.transactions.insert(0, new_transaction)
-                            
-                            st.success(f"Payment of ₹{bill['amount']:,.2f} for {bill['name']} processed successfully!")
-                            st.balloons()
+                            if success:
+                                st.success(f"Payment of ₹{bill['amount']:,.2f} for {bill['name']} processed successfully!")
+                                st.balloons()
+                                st.rerun()
+                            else:
+                                st.error("Failed to process payment. Please try again.")
                     except Exception as e:
                         st.error(f"Error processing bill payment: {str(e)}")
         
@@ -1491,6 +1779,7 @@ class CGBankApp:
                                                       "Gas Company", "Internet Provider", "Other"])
                 if biller == "Other":
                     custom_biller = st.text_input("Enter Biller Name")
+                    biller = custom_biller if custom_biller else "Unknown Biller"
                 account_num = st.text_input("Account Number")
                 bill_amount = st.number_input("Amount (₹)", min_value=0.01, step=0.01)
                 submitted = st.form_submit_button("Pay Bill", use_container_width=True)
@@ -1500,33 +1789,54 @@ class CGBankApp:
                         if bill_amount > user['balance']:
                             st.error("Insufficient funds to pay this bill!")
                         else:
-                            # Update the balance in both session state and BANK_DATA
-                            new_balance = user['balance'] - bill_amount
-                            user['balance'] = new_balance
-                            
-                            # Update the original BANK_DATA user balance
-                            username_lower = st.session_state.current_user.lower()
-                            for uname, user_data in BANK_DATA['users'].items():
-                                if uname.lower() == username_lower:
-                                    user_data['balance'] = new_balance
-                                    break
-                            
-                            # Create and add the new transaction
-                            new_transaction = {
-                                'date': datetime.now(),
-                                'description': f'Bill Payment: {biller}',
-                                'amount': -bill_amount,
-                                'balance': new_balance
+                            # Create new bill data
+                            new_bill = {
+                                "name": biller,
+                                "amount": bill_amount,
+                                "due": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
+                                "status": "Upcoming"
                             }
                             
-                            # Update transactions in session state
-                            if 'transactions' not in st.session_state:
-                                st.session_state.transactions = []
-                            st.session_state.transactions.insert(0, new_transaction)
-                            
-                            st.success(f"Bill payment of ₹{bill_amount:,.2f} processed successfully!")
+                            # Add the bill and process payment
+                            success = CGBankDatabase.add_new_bill(st.session_state.current_user, new_bill)
+                            if success:
+                                payment_success = CGBankDatabase.add_bill_payment(
+                                    st.session_state.current_user,
+                                    biller,
+                                    bill_amount
+                                )
+                                
+                                if payment_success:
+                                    st.success(f"Bill payment of ₹{bill_amount:,.2f} processed successfully!")
+                                    st.rerun()
+                                else:
+                                    st.error("Payment processed but failed to update records.")
+                            else:
+                                st.error("Failed to add new bill. Please try again.")
                     except Exception as e:
                         st.error(f"Error processing bill payment: {str(e)}")
+    
+    def run(self):
+        """Run the application"""
+        self._render_sidebar()
+        
+        if st.session_state.logged_in:
+            self._render_popup_bot()
+            
+            if st.session_state.page == "dashboard":
+                self._render_dashboard()
+            elif st.session_state.page == "transactions":
+                self._render_transactions_page()
+            elif st.session_state.page == "transfer":
+                self._render_transfer_page()
+            elif st.session_state.page == "bills":
+                self._render_bills_page()
+            elif st.session_state.page == "reports":
+                self._render_report_page()
+            elif st.session_state.page == "rexa":
+                self._render_bot_page()
+        else:
+            self._render_login_page()
 
 if __name__ == "__main__":
     app = CGBankApp()
